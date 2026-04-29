@@ -13,7 +13,7 @@ Cada cliente opera em um terminal independente, enviando mensagens únicas para 
 
 | Cliente 1 | Cliente 2 | Cliente 3 |
 | :---: | :---: | :---: |
-| ![Mensagem Cliente 1](cliente1.png) | ![Mensagem Cliente 2](cliente2.png) | ![Mensagem Cliente 3](cliente3.png) |
+| ![Mensagem Cliente 1](imagens%20de%20teste/cliente%201.png) | ![Mensagem Cliente 2](imagens%20de%20teste/cliente%202.png) | ![Mensagem Cliente 3](imagens%20de%20teste/cliente%203.png) |
 | *Envio de mensagem inicial* | *Teste de concorrência* | *Validação de terceira via* |
 
 ---
@@ -21,7 +21,7 @@ Cada cliente opera em um terminal independente, enviando mensagens únicas para 
 ### 🖥️ Visão Geral do Servidor
 O terminal do servidor centraliza o recebimento de todas as mensagens, identificando cada cliente por sua porta efêmera única.
 
-![Terminal do Servidor](servidor.png)
+![Terminal do Servidor](imagens%20de%20teste/servidor.png)
 *Legenda: Servidor processando mensagens de múltiplos IDs de threads simultaneamente.*
 
 ---
