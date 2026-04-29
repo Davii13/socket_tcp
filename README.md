@@ -1,51 +1,125 @@
-# Relatório de Execução: Sockets TCP Concorrentes em Python
+# Relatório Técnico: Comunicação Sockets TCP Concorrentes
 
-Este documento detalha a implementação e os testes realizados para validar a comunicação multiponto utilizando Sockets TCP e Threads em Python.
+**Disciplina:** Redes de Computadores  
+**Professor:** Marco Aurélio de Souza Birchal  
 
 ---
 
-## 🚀 Demonstração da Execução (Capturas de Tela)
+## 1. Enunciado da Atividade
+Implementar e testar os códigos de comunicação multiponto utilizando Sockets TCP e Threads em Python, baseados no material `REDES3_ES_TCP_Sockets_Parte2.pdf`. 
 
-Abaixo estão registradas as evidências de funcionamento do sistema com três clientes simultâneos e o servidor processando todas as requisições.
+O objetivo é validar a capacidade de um servidor TCP em gerenciar múltiplas conexões simultâneas (concorrência) através de threads.
 
-### 💻 Clientes em Execução
-Cada cliente opera em um terminal independente, enviando mensagens únicas para o servidor.
+> **Nota de Configuração:** Conforme solicitado, o endereço IP nos códigos foi ajustado para `127.0.0.1` (localhost) para permitir a execução e teste local sem dependência de redes externas.
+
+---
+
+## 2. Códigos Implementados
+
+### 2.1. Servidor Concorrente (`sockete_tcp_concorrente_servidor.py`)
+O servidor foi projetado para escutar na porta `50000` e, para cada nova conexão aceita, disparar uma thread independente para processar as mensagens do cliente sem bloquear o loop principal.
+
+```python
+# -*- coding: utf-8 -*-
+import socket
+import _thread
+
+HOST = '127.0.0.1' # Endereco IP do Servidor
+PORT = 50000       # Porta que o Servidor está
+
+# Função chamada quando uma nova thread for iniciada
+def conectado(con, cliente):
+    print('\nCliente conectado:', cliente)
+    while True:
+        msg = con.recv(1024)
+        if not msg:
+            break
+        print('\nCliente..:', cliente)
+        print('Mensagem.:', msg.decode())
+
+    print('\nFinalizando conexao do cliente', cliente)
+    con.close()
+    _thread.exit()
+
+tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+orig = (HOST, PORT)
+
+tcp.bind(orig)
+tcp.listen(5) # Permite até 5 conexões na fila de espera
+
+print('\nServidor TCP concorrente iniciado no IP', HOST, 'na porta', PORT)
+
+try:
+    while True:
+        con, cliente = tcp.accept()
+        print('\nNova thread iniciada para essa conexão')
+        _thread.start_new_thread(conectado, tuple([con, cliente]))
+except KeyboardInterrupt:
+    print('\nFinalizando o servidor...')
+finally:
+    tcp.close()
+```
+
+### 2.2. Cliente TCP (`socket_tcp_concorrente_cliente.py`)
+O cliente estabelece uma conexão via stream (TCP) com o servidor e permite o envio de mensagens em loop até que o usuário decida encerrar.
+
+```python
+import socket
+
+HOST = '127.0.0.1' # Endereco IP do Servidor
+PORT = 50000       # Porta que o Servidor está
+
+tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+destino = (HOST, PORT)
+
+try:
+    tcp.connect(destino)
+    print('\nDigite suas mensagens. Para sair, digite "sair" ou pressione Enter vazio.')
+    
+    while True:
+        mensagem = input('Sua mensagem: ')
+        
+        if mensagem.lower() == 'sair' or not mensagem:
+            break
+            
+        tcp.send(mensagem.encode())
+        
+except Exception as e:
+    print(f'\nErro: {e}')
+finally:
+    print('\nFechando conexão...')
+    tcp.close()
+```
+
+---
+
+## 3. Resultados da Execução
+
+Abaixo estão as capturas de tela que comprovam a execução simultânea de três instâncias do cliente enviando mensagens para o servidor central.
+
+### 💻 Clientes em Execução (Terminais Independentes)
 
 | Cliente 1 | Cliente 2 | Cliente 3 |
 | :---: | :---: | :---: |
 | ![Mensagem Cliente 1](imagens%20de%20teste/cliente%201.png) | ![Mensagem Cliente 2](imagens%20de%20teste/cliente%202.png) | ![Mensagem Cliente 3](imagens%20de%20teste/cliente%203.png) |
-| *Envio de mensagem inicial* | *Teste de concorrência* | *Validação de terceira via* |
+| *Instância 1* | *Instância 2* | *Instância 3* |
 
----
-
-### 🖥️ Visão Geral do Servidor
-O terminal do servidor centraliza o recebimento de todas as mensagens, identificando cada cliente por sua porta efêmera única.
+### 🖥️ Visão Consolidada do Servidor
+O servidor identifica cada conexão por meio do par `(IP, Porta Efêmera)`. Note que cada cliente possui uma porta de origem única (ex: 51234, 51235, etc.), permitindo que o servidor direcione as respostas corretamente através das threads.
 
 ![Terminal do Servidor](imagens%20de%20teste/servidor.png)
-*Legenda: Servidor processando mensagens de múltiplos IDs de threads simultaneamente.*
+*Legenda: Servidor processando múltiplas threads simultaneamente.*
 
 ---
 
-## 🛠️ Detalhes da Implementação
+## 4. Explicação Técnica do Funcionamento
 
-### 1. Servidor Concorrente (`sockete_tcp_concorrente_servidor.py`)
-O servidor utiliza a biblioteca `_thread` para garantir que o loop principal não seja bloqueado.
-*   **Endereço:** `127.0.0.1` (Localhost)
-*   **Porta:** `50000`
-*   **Capacidade:** Configurado com `tcp.listen(5)` para gerenciar a fila de espera.
+O sistema baseia-se no modelo **Client-Server Multithread**:
 
-### 2. Cliente TCP (`socket_tcp_concorrente_cliente.py`)
-O cliente foi ajustado para conectar-se ao endereço de loopback, garantindo que o teste funcione em ambiente local.
-*   **Protocolo:** TCP (Stream)
-*   **Saída:** Implementada verificação de mensagem vazia ou `CTRL+X` para encerramento seguro da conexão.
+1.  **Handshake TCP:** Quando o cliente executa `tcp.connect()`, ocorre o "Three-way Handshake" para estabelecer uma conexão confiável.
+2.  **Concorrência via Threads:** O servidor utiliza a função `_thread.start_new_thread()`. Isso permite que o processo pai continue executando o `tcp.accept()` para ouvir novos clientes, enquanto o processo filho (thread) cuida exclusivamente da comunicação com o cliente já conectado.
+3.  **Portas Efêmeras:** Embora o servidor utilize a porta fixa `50000`, o sistema operacional atribui portas aleatórias (efêmeras) para cada cliente, o que possibilita a distinção entre as conexões.
+4.  **Localhost (127.0.0.1):** O uso deste IP garante que a comunicação ocorra dentro da pilha de rede interna do computador, ideal para testes de desenvolvimento e isolamento de problemas de rede física.
 
 ---
-
-## 🧠 Explicação Técnica
-O teste valida o conceito de **Servidor Concorrente**. Diferente de um servidor iterativo (que atende um por um), este modelo cria um "espaço de trabalho" (Thread) dedicado para cada conexão. 
-
-**Por que mudar para 127.0.0.1?**
-Conforme solicitado pelo professor, a alteração é necessária pois o código original pode conter IPs de redes externas. O IP `127.0.0.1` garante que o tráfego de rede nunca saia da placa de rede local, permitindo o teste mesmo sem conexão externa.
-
----
-*Relatório gerado para a disciplina de Redes de Computadores.*
+*Relatório desenvolvido como parte das atividades práticas da disciplina de Redes de Computadores.*
