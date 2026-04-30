@@ -50,14 +50,157 @@ Utiliza `SOCK_STREAM`. O servidor aceita uma única conexão por vez, lê uma me
 
 ## 4. CÓDIGO FONTE
 
-### 4.1. Servidor e Cliente TCP Concorrentes
-(Veja os arquivos `sockete_tcp_concorrente_servidor.py` e `socket_tcp_concorrente_cliente.py` na pasta `codigos`)
+Nesta seção, apresentamos os códigos completos e funcionais implementados e utilizados nas validações descritas neste documento.
 
-### 4.2. Servidor e Cliente UDP
-(Veja os arquivos `UDPServer.py` e `UDPClient.py` na pasta `codigos`)
+### 4.1. Servidor TCP Concorrente (Multithread)
 
-### 4.3. Servidor e Cliente TCP Simples
-(Veja os arquivos `TCPServer.py` e `TCPClient.py` na pasta `codigos`)
+```python
+# -*- coding: utf-8 -*-
+import socket
+import _thread
+
+HOST = '127.0.0.1' # Endereco IP do Servidor
+PORT = 50000       # Porta que o Servidor está
+
+# Função chamada quando uma nova thread for iniciada
+def conectado(con, cliente):
+    print('\nCliente conectado:', cliente)
+    while True:
+        # Recebendo as mensagens através da conexão
+        msg = con.recv(1024)
+        if not msg:
+            break
+        print('\nCliente..:', cliente)
+        print('Mensagem.:', msg.decode())
+
+    print('\nFinalizando conexao do cliente', cliente)
+    con.close()
+    _thread.exit()
+
+tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+orig = (HOST, PORT)
+
+# Colocando um endereço IP e uma porta no Socket
+tcp.bind(orig)
+
+# Colocando o Socket em modo passivo
+tcp.listen(5) 
+
+print('\nServidor TCP concorrente iniciado no IP', HOST, 'na porta', PORT)
+
+try:
+    while True:
+        # Aceitando uma nova conexão
+        con, cliente = tcp.accept()
+        print('\nNova thread iniciada para essa conexão')
+        # Abrindo uma thread para a conexão
+        _thread.start_new_thread(conectado, tuple([con, cliente]))
+except KeyboardInterrupt:
+    print('\nFinalizando o servidor...')
+finally:
+    # Fechando o Socket principal
+    tcp.close()
+```
+
+### 4.2. Cliente TCP Concorrente
+
+```python
+import socket
+
+HOST = '127.0.0.1' # Endereco IP do Servidor
+PORT = 50000       # Porta que o Servidor está
+
+# Criando a conexão
+tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+destino = (HOST, PORT)
+
+try:
+    tcp.connect(destino)
+    print('\nDigite suas mensagens')
+    print('Para sair use CTRL+X e Enter (ou apenas Enter vazio se o loop permitir)\n')
+    
+    while True:
+        # Recebendo a mensagem do usuário final pelo teclado
+        mensagem = input('Sua mensagem: ')
+        
+        if mensagem == '\x18' or mensagem.lower() == 'sair' or not mensagem:
+            break
+            
+        tcp.send(mensagem.encode())
+        
+except Exception as e:
+    print(f'\nErro: {e}')
+finally:
+    # Fechando o Socket
+    print('\nFechando conexão...')
+    tcp.close()
+```
+
+### 4.3. Servidor e Cliente UDP Simples
+
+**Servidor (`UDPServer.py`)**
+```python
+from socket import *
+
+serverPort = 12000
+serverSocket = socket(AF_INET, SOCK_DGRAM)
+serverSocket.bind(('', serverPort))
+print('The server is ready to receive')
+
+while True:
+    message, clientAddress = serverSocket.recvfrom(2048)
+    modifiedMessage = message.decode().upper()
+    serverSocket.sendto(modifiedMessage.encode(), clientAddress)
+```
+
+**Cliente (`UDPClient.py`)**
+```python
+from socket import *
+
+serverName = '127.0.0.1'
+serverPort = 12000
+clientSocket = socket(AF_INET, SOCK_DGRAM)
+message = input('Input lowercase sentence: ')
+clientSocket.sendto(message.encode(), (serverName, serverPort))
+modifiedMessage, serverAddress = clientSocket.recvfrom(2048)
+print(modifiedMessage.decode())
+clientSocket.close()
+```
+
+### 4.4. Servidor e Cliente TCP Simples
+
+**Servidor (`TCPServer.py`)**
+```python
+from socket import *
+
+serverPort = 12000
+serverSocket = socket(AF_INET, SOCK_STREAM)
+serverSocket.bind(('', serverPort))
+serverSocket.listen(1)
+print('The server is ready to receive')
+
+while True:
+    connectionSocket, addr = serverSocket.accept()
+    sentence = connectionSocket.recv(1024).decode()
+    capitalizedSentence = sentence.upper()
+    connectionSocket.send(capitalizedSentence.encode())
+    connectionSocket.close()
+```
+
+**Cliente (`TCPClient.py`)**
+```python
+from socket import *
+
+serverName = '127.0.0.1'
+serverPort = 12000
+clientSocket = socket(AF_INET, SOCK_STREAM)
+clientSocket.connect((serverName, serverPort))
+sentence = input('Input lowercase sentence: ')
+clientSocket.send(sentence.encode())
+modifiedSentence = clientSocket.recv(1024)
+print('From Server:', modifiedSentence.decode())
+clientSocket.close()
+```
 
 ---
 
@@ -90,53 +233,53 @@ O teste dos servidores UDP e TCP simples foi realizado enviando mensagens de tes
 
 ## 6. ANÁLISE TÉCNICA
 
-A implementação utiliza o modelo clássico de comunicação baseado em sockets TCP com suporte à concorrência por meio de multithreading de baixo nível (`_thread`), bem como comunicação baseada em pacotes via UDP.
+A implementação abordada neste relatório abrange as duas principais formas de transporte na camada de rede (TCP e UDP), bem como a resolução do problema de bloqueio em conexões persistentes utilizando Threads (Concorrência). 
 
-No **servidor concorrente TCP**, o socket é configurado com `AF_INET` (IPv4) e `SOCK_STREAM` (TCP), garantindo uma comunicação confiável, orientada à conexão e com controle de entrega e ordem dos pacotes. Após o `bind()` no endereço `127.0.0.1:50000`, o método `listen(5)` define uma fila de até 5 conexões pendentes, o que já demonstra uma preocupação com múltiplas tentativas simultâneas de conexão.
+### 6.1. Protocolo TCP e Concorrência
 
-O ponto central da concorrência está no uso da função `_thread.start_new_thread()`. A cada nova conexão aceita via `accept()`, o servidor cria uma nova thread que executa a função que lida com as requisições. Essa abordagem permite que:
-- Cada cliente seja tratado de forma independente.
-- O servidor continue aceitando novas conexões sem bloqueio.
-- A leitura de dados ocorra de forma isolada por cliente.
+O **TCP (Transmission Control Protocol)** é um protocolo orientado à conexão, o que significa que antes de haver troca de dados, cliente e servidor executam um processo de estabelecimento de sessão confiável conhecido como *Three-Way Handshake* (SYN, SYN-ACK, ACK). Isso é invocado no cliente primariamente pela função `connect()`. 
 
-Dentro da thread, o loop de recepção de dados funciona de forma contínua até que o cliente encerre a conexão. Esse comportamento está alinhado com o funcionamento do TCP, onde o encerramento da conexão é detectado pela ausência de dados. Outro ponto importante é que o servidor trabalha com portas efêmeras para cada cliente, o que permite múltiplas conexões simultâneas mesmo utilizando o mesmo IP e porta principal.
+No **servidor concorrente TCP**, o socket é configurado com a família de endereços `AF_INET` (IPv4) e o tipo `SOCK_STREAM` (indicando um fluxo TCP contínuo e ordenado). O método `listen(5)` coloca o servidor em modo de escuta ativa, definindo que o sistema operacional pode enfileirar até 5 requisições de conexão de clientes simultâneos que estão aguardando o processamento do `accept()`.
 
-No **cliente concorrente TCP**, o fluxo é simples e direto:
-- Criação do socket TCP.
-- Estabelecimento da conexão com `connect()`.
-- Loop interativo com envio de mensagens via `send()`.
-- Codificação em bytes com `.encode()` (necessária para transmissão TCP).
+**O Problema do Bloqueio (Blocking):**
+A função `accept()` e a função `recv()` são, por padrão em Python, blocantes. Isso significa que o servidor iterativo simples (como em nosso Servidor TCP Simples) fica "preso" esperando dados de um cliente já conectado na linha do `recv()`, impedindo que novos clientes consigam se conectar, pois a thread principal está travada e não consegue retornar ao `accept()`.
 
-**Modelos UDP e TCP simples:**
-Nos exemplos de TCP e UDP simples, ilustra-se o funcionamento fundamental. No UDP (`SOCK_DGRAM`), as mensagens são enviadas e recebidas com o par de funções `sendto`/`recvfrom`, sem necessidade de estabelecimento prévio de conexão (`accept`). Já o TCP simples mostra a configuração básica de fluxo, conectando-se e desconectando-se após um envio, provando o funcionamento de stream.
+**A Solução via Multithreading:**
+O ponto central da concorrência e o foco principal desta atividade prática está no uso da biblioteca `_thread` com a função `start_new_thread()`. A cada nova conexão aceita via `accept()`, o servidor despacha a execução daquele cliente específico para uma nova *Thread* paralela rodando a função `conectado()`.
+Como resultado:
+- **Independência:** Cada cliente é tratado em um fluxo de execução separado, garantindo integridade.
+- **Não-bloqueio:** O loop principal do servidor (`while True`) retorna imediatamente para a linha `tcp.accept()`, ficando livre para aceitar a próxima solicitação de cliente quase instantaneamente.
+- **Portas Efêmeras:** O servidor atua escutando ativamente na porta `50000`, mas cada conexão estabelecida ganha uma porta efêmera distinta (alocada pelo Sistema Operacional do cliente). O sistema operacional mapeia essa conexão unívoca através de um socket que representa a tupla matemática completa: `(IP de Destino, Porta 50000, IP de Origem, Porta Efêmera)`.
 
-### Pontos Técnicos Relevantes (Análise Crítica)
+### 6.2. Protocolo UDP
 
-Apesar de funcional, a implementação concorrente apresenta algumas limitações importantes:
-- O uso da biblioteca `_thread` é de baixo nível e menos segura comparada à `threading`, pois não oferece controle refinado de threads.
-- Não há sincronização de recursos compartilhados (ex: prints podem se misturar no terminal).
-- O servidor não trata exceções dentro da thread, o que pode causar falhas silenciosas.
-- Não existe controle de limite de threads → em cenários reais, isso pode causar sobrecarga (problema de escalabilidade).
-- Não há envio de resposta do servidor para o cliente neste fluxo concorrente (a comunicação é unidirecional).
+No modelo **UDP (User Datagram Protocol)**, o tipo de socket definido é `SOCK_DGRAM`. 
+O UDP não estabelece uma conexão prévia ("connectionless"), não retransmite pacotes perdidos, não lida com congestionamento e não garante ordem de chegada. Ele atua meramente despachando "datagramas".
+Na prática, como demonstrado no código simples de UDP implementado:
+- O servidor não necessita de `listen()` nem `accept()`. Ele simplesmente entra em um loop infinito aguardando e recebendo qualquer datagrama que chegue na porta especificada através da função `recvfrom()`.
+- O cliente também prescinde da função `connect()`. Ele apenas despacha o pacote contendo o dado, o endereço e a porta atrelados via `sendto()`.
+Esta abordagem torna a comunicação extremante rápida com uma menor sobrecarga (*overhead*) de cabeçalhos no pacote de rede, sendo ideal para aplicações onde a perda de pacotes ocasionais é tolerável em troca de desempenho (como streaming de vídeo e jogos online).
 
-Mesmo assim, para fins didáticos, os códigos cumprem muito bem o objetivo de demonstrar concorrência e uso fundamental dos protocolos TCP e UDP em Python.
+### 6.3. Pontos Críticos e Limitações
+
+Apesar da implementação atender integralmente ao propósito didático, há aspectos técnicos a serem destacados visando as melhores práticas do mundo corporativo:
+
+1. **Uso do Módulo `_thread`:** A biblioteca `_thread` do Python fornece acesso em baixo nível às threads do SO. Para aplicações modernas de produção, recomenda-se fortemente o uso do módulo de alto nível `threading` (que encapsula e gerencia threads com orientação a objetos) ou do modelo de E/S Assíncrona via event loop (`asyncio`), que reduz drasticamente o peso de chaveamento de contexto imposto ao processador.
+2. **Sincronização de Threads (Race Conditions):** Na implementação realizada, várias threads podem chamar o comando `print()` em milissegundos muito próximos. Em momentos de alto tráfego no servidor, as saídas podem se "misturar" ou imprimir desordenadamente no console de gerenciamento, visto que não foi utilizado nenhum mecanismo de travamento seguro (*Mutex/Lock*).
+3. **Escalabilidade (Gerenciamento de Recursos):** O servidor atual não limita ativamente a quantidade máxima de threads que podem ser instanciadas. Um ataque simples de *SYN Flood* que envie milhares de requisições de conexão simultâneas forçaria o servidor a gerar uma thread pesada para cada uma delas, esgotando rapidamente a memória RAM e paralisando o host. Em cenários robustos, soluciona-se isto utilizando um limite via **Thread Pool** ou modelos de multiplexação orientados a evento (como o `epoll` do Linux).
+4. **Resiliência a Falhas:** Exceções que venham a ocorrer durante a recepção de mensagens dentro da thread (como o cliente fechando abruptamente a aplicação gerando `ConnectionResetError` em vez de um encerramento limpo com retorno de bytes vazios) não estão sendo apropriadamente capturadas com blocos `try/except` na função da thread, o que faria a thread abortar silenciosamente ou despejar um log poluído de rastreamento no terminal principal.
 
 ---
 
 ## 7. CONCLUSÃO
 
-A atividade permitiu compreender, de forma prática, como funciona a comunicação cliente-servidor utilizando sockets TCP e UDP, e, principalmente, como a concorrência pode ser implementada em servidores reais.
+A atividade permitiu compreender a base fundamental da programação em rede, experimentando na prática os comportamentos e características intrínsecas da camada de transporte entre os protocolos TCP e UDP, além de demonstrar a necessidade iminente de mecanismos de concorrência em aplicações persistentes.
 
-A principal evolução em relação ao modelo iterativo está no uso de threads, que elimina o bloqueio no atendimento e possibilita que múltiplos clientes sejam atendidos simultaneamente. Isso torna o sistema mais próximo de aplicações reais, como servidores web e sistemas distribuídos.
+A evolução prática de um modelo TCP Iterativo para o modelo **TCP Concorrente com Threads** provou, em caráter definitivo, a remoção do gargalo de bloqueio no atendimento a clientes (conhecido como *Blocking I/O*). Essa adaptação possibilitou que múltiplos clientes fossem atendidos sem latência sentida, como bem demonstrado e avaliado. Isso traz o nosso projeto didático a um comportamento muito próximo ao dos robustos servidores web e bancos de dados modernos.
 
-Os testes realizados com múltiplos clientes simultâneos comprovaram que a abordagem funciona corretamente, evidenciando o uso eficiente de portas efêmeras e execução paralela das threads.
+Ademais, a implementação reforçou conceitos de fundamental importância na Engenharia de Software e Redes, como:
+- Confiabilidade, controle de fluxo e o *Three-Way Handshake* no TCP comparados à velocidade volátil dos Datagramas no UDP.
+- O mapeamento lógico que possibilita múltiplos clientes se conectarem a uma mesma Porta de destino através do sistema de Portas Efêmeras únicas atreladas ao endereço IP de origem.
+- Os princípios essenciais de paralelismo e concorrência na arquitetura de sistemas operacionais.
 
-Além disso, a atividade reforçou conceitos importantes como:
-- Comunicação orientada à conexão (TCP) e não-orientada à conexão (UDP).
-- Serialização de dados (`encode`/`decode`).
-- Controle de fluxo básico em aplicações de rede.
-- Concorrência e paralelismo.
-
-Apesar de simples, a implementação abre espaço para melhorias futuras, como uso de bibliotecas mais robustas (`threading`), tratamento de exceções mais completo, comunicação bidirecional generalizada e controle de carga.
-
-De forma geral, o objetivo proposto foi totalmente alcançado, proporcionando não apenas a execução prática, mas também uma compreensão mais profunda do funcionamento interno de servidores concorrentes e implementações de rede.
+Em suma, o objetivo da atividade foi plenamente alcançado, pavimentando um sólido entendimento para o design, análise crítica e desenvolvimento de aplicações de rede mais complexas e resilientes no futuro.
